@@ -22,7 +22,7 @@ public:
     {
         return rootPath.substr(0, rootPath.find_first_of("\\") + 1) + x;
     }
-    static bool fileAttrFilter(DWORD attr)
+    static char fileAttrFilter(DWORD attr)
     {
 
         if ((FILE_ATTRIBUTE_DIRECTORY & attr) != 0x0)
@@ -32,22 +32,18 @@ public:
                 (attr & FILE_ATTRIBUTE_HIDDEN) == 0x0 &&
                 (attr & FILE_ATTRIBUTE_DEVICE) == 0x0 &&
                 (attr & FILE_ATTRIBUTE_SYSTEM) == 0x0)
-                return true;
+                return 'D';
         }
         else
         {
             // file
             if (
-                (attr & FILE_ATTRIBUTE_NORMAL) != 0x0 ||
-                ((attr & FILE_ATTRIBUTE_SYSTEM) == 0x0 &&
-                 (attr & FILE_ATTRIBUTE_DEVICE) == 0x0 &&
-                 (attr & FILE_ATTRIBUTE_READONLY) == 0x0 &&
-                 (attr & FILE_ATTRIBUTE_HIDDEN == 0x0))
-
-            )
-                return true;
+                (attr & FILE_ATTRIBUTE_NORMAL) != 0x0 &&
+                (attr & FILE_ATTRIBUTE_READONLY) == 0x0 &&
+                (attr & FILE_ATTRIBUTE_HIDDEN == 0x0))
+                return 'F';
         };
-        return false;
+        return 'N';
     };
 };
 class Process
@@ -110,7 +106,10 @@ public:
 #if MULTI_THREADING == 1
             thread(Scanners::scanRootRecursive, roots.at(i), callback).detach();
 #else
+        {
+            cout << "Scanning disk: " << roots.at(i) << endl;
             Scanners::scanRootRecursive(roots.at(i), callback);
+        }
 #endif
     }
 
@@ -119,6 +118,8 @@ public:
 
         WIN32_FIND_DATAA fData = {0};
         const char *formated = Helpers::formatPath('*', root).c_str();
+
+        cout << "formated path: " << formated << endl;
         HANDLE searchHandle = FindFirstFileA(formated, &fData);
 #ifdef DEBUG
         if (searchHandle == INVALID_HANDLE_VALUE)
@@ -129,9 +130,9 @@ public:
 #endif
         do
         {
-            if (Helpers::fileAttrFilter(fData.dwFileAttributes))
+            if (Helpers::fileAttrFilter(fData.dwFileAttributes) == 'D')
             {
-                string sub_root = root.substr(0, root.find_last_of("\\") + 1) + fData.cFileName;
+                string sub_root = root.substr(0, root.find_last_of("\\") + 1) + fData.cFileName + "\\";
 #ifdef DEBUG
                 cout << "Found out Directory: " << sub_root << endl;
 #endif
@@ -141,7 +142,7 @@ public:
                 Scanners::scanRootRecursive(sub_root, callback);
 #endif
             }
-            else if (Helpers::fileAttrFilter(fData.dwFileAttributes))
+            else if (Helpers::fileAttrFilter(fData.dwFileAttributes) == 'F')
             {
                 string file = root.substr(0, root.find_first_of("\\") + 1) + fData.cFileName;
 #ifdef DEBUG
